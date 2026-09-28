@@ -1,0 +1,6 @@
+{
+  "name": "CyberShield - Phishing & Online Fraud Awareness",
+  "description": "Interactive cybersecurity awareness platform to detect phishing, identify online frauds, practice with realistic scam simulations, and test your defense readiness.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

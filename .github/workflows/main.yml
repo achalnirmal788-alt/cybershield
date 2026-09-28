@@ -1,0 +1,103 @@
+name: CyberShield CI & Build
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+# Permissions for deploying to GitHub Pages or checking out repository
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    outputs:
+      pages_available: ${{ steps.pages.outcome == 'success' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Locate project directory
+        id: locate
+        run: |
+          echo "=== Root repository files ==="
+          ls -la
+          
+          # Find directory containing package.json
+          PKG_PATH=$(find . -name "package.json" -not -path "*/node_modules/*" -not -path "*/.*/*" | head -n 1)
+          if [ -z "$PKG_PATH" ]; then
+            echo "::error::package.json was not found in this repository. Make sure package.json is committed to Git."
+            find . -maxdepth 3 -not -path "*/.*"
+            exit 1
+          fi
+          
+          DIR=$(dirname "$PKG_PATH")
+          echo "Discovered package.json at: $PKG_PATH (directory: $DIR)"
+          echo "dir=$DIR" >> $GITHUB_OUTPUT
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: ${{ steps.locate.outputs.dir }}
+        run: npm install --legacy-peer-deps
+
+      - name: Type check (Lint)
+        working-directory: ${{ steps.locate.outputs.dir }}
+        run: npm run lint
+
+      - name: Build production app
+        working-directory: ${{ steps.locate.outputs.dir }}
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cybershield-dist
+          path: ${{ steps.locate.outputs.dir }}/dist
+          retention-days: 14
+
+      - name: Setup Pages
+        id: pages
+        if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+        continue-on-error: true
+        with:
+          enablement: true
+
+      - name: Upload artifact for GitHub Pages
+        if: steps.pages.outcome == 'success'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ steps.locate.outputs.dir }}/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: needs.build.outputs.pages_available == 'true'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
